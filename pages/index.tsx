@@ -1,30 +1,55 @@
 import Head from "next/head";
-import client from "../lib/mongodb";
-import type { InferGetServerSidePropsType, GetServerSideProps } from "next";
+import { useState } from "react";
+import clientPromise from "../lib/mongodb";
+import { InferGetServerSidePropsType } from "next";
+import Layout from "../components/Layout";
 
-type ConnectionStatus = {
-  isConnected: boolean;
+type Props = {
+  posts: [Post];
 };
 
-export const getServerSideProps: GetServerSideProps<
-  ConnectionStatus
-> = async () => {
+type Post = {
+  _id: String;
+  title: String;
+  content: String;
+};
+
+export async function getServerSideProps() {
   try {
-    await client.connect(); // `await client.connect()` will use the default database passed in the MONGODB_URI
+    let response = await fetch("http://localhost:3000/api/getPosts");
+    let posts = await response.json();
+
     return {
-      props: { isConnected: true },
+      props: { posts: JSON.parse(JSON.stringify(posts)) },
     };
   } catch (e) {
     console.error(e);
-    return {
-      props: { isConnected: false },
-    };
   }
-};
+}
 
-export default function Home({
-  isConnected,
-}: InferGetServerSidePropsType<typeof getServerSideProps>) {
+export default function Home(props: Props) {
+  const [posts, setPosts] = useState<[Post]>(props.posts);
+
+  const handleDeletePost = async (postId: string) => {
+    try {
+      let response = await fetch(
+        "http://localhost:3000/api/deletePost?id=" + postId,
+        {
+          method: "POST",
+          headers: {
+            Accept: "application/json, text/plain, */*",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      response = await response.json();
+      window.location.reload();
+    } catch (error) {
+      console.log("An error occured while deleting ", error);
+    }
+  };
+
   return (
     <div className="container">
       <Head>
@@ -32,56 +57,35 @@ export default function Home({
         <link rel="icon" href="/favicon.ico" />
       </Head>
 
-      <main>
-        <h1 className="title">
-          Welcome to <a href="https://nextjs.org">Next.js with MongoDB!</a>
-        </h1>
-
-        {isConnected ? (
-          <h2 className="subtitle">You are connected to MongoDB</h2>
-        ) : (
-          <h2 className="subtitle">
-            You are NOT connected to MongoDB. Check the <code>README.md</code>{" "}
-            for instructions.
-          </h2>
-        )}
-
-        <p className="description">
-          Get started by editing <code>pages/index.js</code>
-        </p>
-
-        <div className="grid">
-          <a href="https://nextjs.org/docs" className="card">
-            <h3>Documentation &rarr;</h3>
-            <p>Find in-depth information about Next.js features and API.</p>
-          </a>
-
-          <a href="https://nextjs.org/learn" className="card">
-            <h3>Learn &rarr;</h3>
-            <p>Learn about Next.js in an interactive course with quizzes!</p>
-          </a>
-
-          <a
-            href="https://github.com/vercel/next.js/tree/canary/examples"
-            className="card"
-          >
-            <h3>Examples &rarr;</h3>
-            <p>Discover and deploy boilerplate example Next.js projects.</p>
-          </a>
-
-          <a
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=default-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="card"
-          >
-            <h3>Deploy &rarr;</h3>
-            <p>
-              Instantly deploy your Next.js site to a public URL with Vercel.
-            </p>
-          </a>
+      <Layout>
+        <div className="posts-body">
+          <h1 className="posts-body-heading">Top 20 posts</h1>
+          {posts?.length > 0 ? (
+            <ul className="posts-list">
+              {posts.map((post, index) => {
+                return (
+                  <li key={index} className="post-item">
+                    <div className="post-item-details">
+                      <h2>{post.title}</h2>
+                      <p>{post.content}</p>
+                    </div>
+                    <div className="post-item-actions">
+                      <a href={`/posts/${post._id}`}>Edit</a>
+                      <button
+                        onClick={() => handleDeletePost(post._id as string)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <h2 className="posts-body-heading">Ooops! No posts...</h2>
+          )}
         </div>
-      </main>
+      </Layout>
 
       <footer>
         <a
@@ -95,22 +99,33 @@ export default function Home({
       </footer>
 
       <style jsx>{`
-        .container {
-          min-height: 100vh;
-          padding: 0 0.5rem;
-          display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
+        .posts-body {
+          width: 400px;
+          margin: 10px auto;
         }
 
-        main {
-          padding: 5rem 0;
-          flex: 1;
+        .posts-body-heading {
+          font-family: sans-serif;
+        }
+
+        .posts-list {
+          list-style: none;
+          display: block;
+        }
+
+        .post-item {
+          width: 100%;
+          padding: 10px;
+          border: 1px solid #d5d5d5;
+        }
+
+        .post-item-actions {
           display: flex;
-          flex-direction: column;
-          justify-content: center;
-          align-items: center;
+          justify-content: space-between;
+        }
+
+        .post-item-actions a {
+          text-decoration: none;
         }
 
         footer {
@@ -173,15 +188,8 @@ export default function Home({
           border-radius: 5px;
           padding: 0.75rem;
           font-size: 1.1rem;
-          font-family:
-            Menlo,
-            Monaco,
-            Lucida Console,
-            Liberation Mono,
-            DejaVu Sans Mono,
-            Bitstream Vera Sans Mono,
-            Courier New,
-            monospace;
+          font-family: Menlo, Monaco, Lucida Console, Liberation Mono,
+            DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New, monospace;
         }
 
         .grid {
@@ -203,9 +211,7 @@ export default function Home({
           text-decoration: none;
           border: 1px solid #eaeaea;
           border-radius: 10px;
-          transition:
-            color 0.15s ease,
-            border-color 0.15s ease;
+          transition: color 0.15s ease, border-color 0.15s ease;
         }
 
         .card:hover,
@@ -243,17 +249,8 @@ export default function Home({
         body {
           padding: 0;
           margin: 0;
-          font-family:
-            -apple-system,
-            BlinkMacSystemFont,
-            Segoe UI,
-            Roboto,
-            Oxygen,
-            Ubuntu,
-            Cantarell,
-            Fira Sans,
-            Droid Sans,
-            Helvetica Neue,
+          font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto,
+            Oxygen, Ubuntu, Cantarell, Fira Sans, Droid Sans, Helvetica Neue,
             sans-serif;
         }
 
